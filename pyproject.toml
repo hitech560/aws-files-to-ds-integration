@@ -1,0 +1,13 @@
+[project]
+name = "aws-files-to-ds"
+version = "0.1.0"
+description = "AWS Secured Shared Files to SAP Datasphere Integration"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chardet>=5.2.0",
+    "hdbcli>=2.24.26",
+    "ipykernel>=6.29.5",
+    "pandas>=2.3.0",
+    "pyodbc>=5.2.0",
+]
