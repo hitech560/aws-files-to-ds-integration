@@ -1,8 +1,44 @@
-File Name
-SIP/Wholesale Targets/Wholesale target.csv
-Dealer Target/Inbound
-COOP/Inbound/National/COOP Usage.csv
-DSSO/Dealer Census/Inbound/Dealer Census.csv
-Daily Sales Graph/Inbound/Sales_target/Daily sales target file.csv
-ESRA/Inbound/new_data/DATE
-ESRA/Inbound/new_data/Series_Sales.csv
+File Name,Table Name,Skip Rows,Skip Footer,Encoding,Has Header,Delimiter,Quotechar
+SIP/Wholesale Targets/Wholesale target.csv,WHOLESALE_TARGET,,,,,,
+Dealer Target/Inbound/Toyota New Car Target.csv,TOYOTA_NEW_CAR_TARGET,,,,,,
+Dealer Target/Inbound/Lexus New Car Target.csv,LEXUS_NEW_CAR_TARGET,,,,,,
+Parts/Inbound/AtlanticTargetByApp.csv,ATLANTICTARGETBYAPP,,,,,,
+Parts/Inbound/CentralTargetByApp.csv,CENTRALTARGETBYAPP,,,,,,
+Parts/Inbound/LexusTargetByApp.csv,LEXUSTARGETBYAPP,,,,,,
+Parts/Inbound/QuebecTargetByApp.csv,QUEBECTARGETBYAPP,,,,,,
+Parts/Inbound/PacificTargetByApp.csv,PACIFICTARGETBYAPP,,,,,,
+Parts/Inbound/PrairieTargetByApp.csv,PRAIRIETARGETBYAPP,,,,,,
+Parts/Inbound/LandcruiserTargetByApp.csv,LANDCRUISERTARGETBYAPP,,,,,,
+Parts/Inbound/Direct SalesTargetByApp.csv,DIRECT_SALESTARGETBYAPP,,,,,,
+Getsudo/Inbound/Getsudo_target_Toyota.csv,GETSUDO_TARGET_TOYOTA,,,,,,
+Getsudo/Inbound/Getsudo_target_Lexus.csv,GETSUDO_TARGET_LEXUS,,,,,,
+TCUV/Inbound/TOY_TCUV_TARGETS.csv,TOY_TCUV_TARGETS,,,,,,
+LCPO/Inbound/LCPO_TARGETS.csv,LCPO_TARGETS,,,,,,
+POLK/Inbound/Geo_assign/TOYGEO.csv,TOYGEO,,,,,,
+POLK/Inbound/Geo_assign/LEXGEO.csv,LEXGEO,,,,,,
+POLK/Inbound/PC4DA/Canada_Postal_Points_Unique.txt,CANADA_POSTAL_POINTS_UNIQUE,,,latin1,,,
+Survey/Inbound/Target/Survey_target_L.csv,SURVEY_TARGET_L,,,,,,
+Survey/Inbound/Target/Survey_target_T.csv,SURVEY_TARGET_T,,,,,,
+Ibex Survey/ibex_tcisurveyresult.txt,IBEX_TCISURVEYRESULT,,,,,|,
+Survey/Inbound/Target/Toyota Survey Target Zone.csv,TOYOTA_SURVEY_TARGET_ZONE,,,,,,
+COOP/Inbound/National/COOP Tracker National.csv,COOP_TRACKER_NATIONAL,,,,,,
+COOP/Inbound/National/Co-op Usage.csv,COOP_USAGE,,,,,,
+POLK/Inbound/Monthly/Polk_Lexus_Cube.txt,POLK_LEXUS_CUBE,,,,,,
+POLK/Inbound/Monthly/Polk_Toyota.txt,POLK_TOYOTA,,,,,,
+DSSO/Dealer Census/Inbound/Dealer Census.csv,DEALER_CENSUS,,,,,,
+Accessories/Inbound/Target/Accessories Monthly Target Upload.csv,ACCESSORIES_MONTHLY_TARGET_UPLOAD,,,,,,
+Daily Sales Graph/Inbound/Sales_target/Daily sales target file.csv,DAILY_SALES_TARGET_FILE,,,,,,
+ESRA/Inbound/new_data/DATE/WORKINGSCHEDULE.csv,WORKINGSCHEDULE,,,,,,
+Marketing/Inbound/CDB006A.txt,CDB006A,1,1,latin1,false,,
+Marketing/Inbound/CDB006B.txt,CDB006B,0,1,latin1,false,,
+ECP/Inbound/Toyota ECP Targets.csv,TOYOTA_ECP_TARGETS,,,,,,
+ECP/Inbound/Lexus ECP Targets.csv,LEXUS_ECP_TARGETS,,,,,,
+ESRA/Inbound/new_data/Zone_Sales.csv,ZONE_SALES,,,,,,
+ESRA/Inbound/new_data/Provincial_Sales.csv,PROVINCIAL_SALES,,,,,,
+ESRA/Inbound/new_data/Series_Sales.csv,SERIES_SALES,,,,,,
+ESRA/Inbound/new_data/Major_Market_Sales.csv,MAJOR_MARKET_SALES,,,,,,
+POLK/Inbound/Monthly/All_Segmentation.txt,ALL_SEGMENTATION,,,,true,|,
+BODS/AWS Files to DS/BW Download/ZAD_LRNEW.csv,ZAD_LRNEW,,,,,,
+BODS/AWS Files to DS/BW Download/ZAD_TFSCA.csv,ZAD_TFSCA,,,,,,
+BODS/AWS Files to DS/BW Download/ZAD_TFSH2.csv,ZAD_TFSH2,,,,,,
+BODS/AWS Files to DS/BW Download/ZAD_TFSH1.csv,ZAD_TFSH1,,,,,,

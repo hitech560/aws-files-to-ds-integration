@@ -10,6 +10,8 @@ from uni_logger import setup_logger
 import pandas as pd
 from hdbcli import dbapi
 
+# from sql_statements import upsert_stmt
+
 # ========================== #
 #         Logging Setup      #
 # ========================== #
@@ -31,9 +33,12 @@ def update_control_table(
     cursor: dbapi.Cursor,
     file_path: Path,
     table_name: str,
+    skip_rows: int,
+    skip_footer: int,
     encoding: str,
     has_header: bool,
     delimiter: str,
+    quotechar: str,
     timestamp: str,
     row_count: int,
     column_count: int,
@@ -48,70 +53,27 @@ def update_control_table(
         logger.warning(f'⚠️ Could not retrieve last modified time for <{file_path.name}> {e}')
         last_modified = None
 
-    try:
-        bods_ts = datetime.strptime(timestamp, '%Y%m%d_%H%M%S').strftime('%Y-%m-%d %H:%M:%S')
-    except Exception as e:
-        logger.warning(f'⚠️ Invalid BODS timestamp format: <{timestamp}>, using original string')
-        bods_ts = timestamp  # fallback to original if format fails
-
     values = [
         file_path.name,
         str(file_path.parent).replace("\\", "/"),  # ✅ directory only
         last_modified,
+        table_name,
+        skip_rows,
+        skip_footer,
+        encoding,
         has_header,
         delimiter,
-        encoding,
-        table_name,
-        bods_ts,
+        quotechar,
+        # bods_ts,
+        timestamp,
         row_count,
         column_count,
         None, # DS_TIMESTAMP will be updated by DS
         status, # will be updated by DS to "DS_COMPLETED"
     ]
 
-    upsert_stmt = """
-    MERGE INTO "AWS_FILES_DS_INTEGRATION" AS target
-    USING (
-        SELECT 
-            ? AS "FILE_NAME",
-            ? AS "FILE_PATH",
-            ? AS "LAST_MODIFIED",
-            ? AS "HAS_HEADER",
-            ? AS "DELIMITER",
-            ? AS "ENCODING",
-            ? AS "TABLE_NAME",
-            ? AS "BODS_TIMESTAMP",
-            ? AS "ROW_COUNT",
-            ? AS "COLUMN_COUNT",
-            ? AS "DS_TIMESTAMP",
-            ? AS "STATUS_FLAG"
-        FROM dummy
-    ) AS src
-    ON target."FILE_NAME" = src."FILE_NAME" AND target."FILE_PATH" = src."FILE_PATH"
-    WHEN MATCHED THEN
-        UPDATE SET
-            "LAST_MODIFIED" = src."LAST_MODIFIED",
-            "HAS_HEADER" = src."HAS_HEADER",
-            "DELIMITER" = src."DELIMITER",
-            "ENCODING" = src."ENCODING",
-            "TABLE_NAME" = src."TABLE_NAME",
-            "BODS_TIMESTAMP" = src."BODS_TIMESTAMP",
-            "ROW_COUNT" = src."ROW_COUNT",
-            "COLUMN_COUNT" = src."COLUMN_COUNT",
-            "DS_TIMESTAMP" = src."DS_TIMESTAMP",
-            "STATUS_FLAG" = src."STATUS_FLAG"
-    WHEN NOT MATCHED THEN
-        INSERT (
-            "FILE_NAME", "FILE_PATH", "LAST_MODIFIED", "HAS_HEADER",
-            "DELIMITER", "ENCODING", "TABLE_NAME", "BODS_TIMESTAMP",
-            "ROW_COUNT", "COLUMN_COUNT", "DS_TIMESTAMP", "STATUS_FLAG"
-        )
-        VALUES (
-            src."FILE_NAME", src."FILE_PATH", src."LAST_MODIFIED", src."HAS_HEADER",
-            src."DELIMITER", src."ENCODING", src."TABLE_NAME", src."BODS_TIMESTAMP",
-            src."ROW_COUNT", src."COLUMN_COUNT", src."DS_TIMESTAMP", src."STATUS_FLAG"
-        );
-    """
+    # In update_control_table() — replace the upsert_stmt definition:
+    upsert_stmt = load_sql(Path("control_table_upsert.sql"))
 
     interpolated_sql = upsert_stmt
     for val in values:
@@ -134,9 +96,28 @@ def update_control_table(
 # ========================== #
 
 def aws_env(config_path: Path, environment: str):
+    match environment:
+        case "DEV":
+            ENV = "DEV"
+        case "UAT" | "QA":
+            ENV = "UAT"
+        case "PROD" | "PRD":
+            ENV = "PRD"
+        case _:
+            ENV = "SBX"    
     config = ConfigParser()
     config.read(config_path)
-    return config[f'AWS_{environment}']['env'], config[f'AWS_{environment}']['aws_base']
+    return config[f'AWS_{ENV}']['env'], config[f'AWS_{ENV}']['aws_base']
+
+
+# Define a helper function to load the SQL from file
+def load_sql(file_path: Path) -> str:
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"❌ Failed to load SQL from {file_path}: {e}")
+        raise
 
 
 def detect_csv_properties(file_path, encoding='utf-8'):
@@ -369,7 +350,12 @@ def process_csv_file_in_chunks(
     table_name: str,
     chunksize: int = 50000,
     timestamp: str = None,
-    has_header: bool = True,
+    has_header: bool = None,
+    encoding: str = None,
+    delimiter: str = None,
+    quotechar: str = None,
+    skip_rows : int = 0, # skip first N lines
+    skip_footer : int = 0,  # skip last N lines
     control_callback=None,
 ) -> bool:
     if not file_path.exists():
@@ -377,97 +363,116 @@ def process_csv_file_in_chunks(
         return False    
 
     total_inserted = 0
-    first_chunk = True
-    encodings_to_try = ['utf-8-sig', 'latin1']
+    # first_chunk = True
+    encodings_to_try = [encoding, 'utf-8-sig', 'latin1'] if encoding else ['utf-8-sig', 'latin1']
     if timestamp is None:
         # ✅ Compute once per file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logger.debug(f'⚠️ BODS ETL timestamp: <{timestamp}>')
 
-    for encoding in encodings_to_try:
-        logger.debug(f'⚠️ Trying encoding: <{encoding}>')
+    for enc in encodings_to_try:
+        logger.debug(f'⚠️ Trying encoding: <{enc}>')
 
         try:
-            props = detect_csv_properties(file_path, encoding=encoding)
+            props = detect_csv_properties(file_path, encoding=enc)
             if not props:
-                # delimiter = detect_csv_delimiter(file_path, encoding=encoding)
-                # has_header = infer_has_header(file_path, encoding=encoding, delimiter=delimiter)
-                # quotechar = None
                 logger.error(f'❌ Cannot detect file properties: <{file_path.resolve()}>')
                 return False
-            else:
-                has_header = props['has_header']
-                delimiter = props['delimiter']
-                quotechar = props['quotechar']
+            has_header = has_header if has_header is not None else props['has_header']
+            delimiter = delimiter or props['delimiter']
+            quotechar = quotechar or props['quotechar']
 
             read_csv_kwargs = {
                 'filepath_or_buffer': file_path,
-                'encoding': encoding,
+                'encoding': enc,
                 'chunksize': chunksize,
                 'delimiter': delimiter,
                 'quotechar': quotechar,
+                'skiprows': skip_rows,
+                # 'skipfooter': skip_bottom,
                 'low_memory': False,
+                'dtype': str,  # ✅ Prevent type inference that removes leading zeros
             }
             if not has_header:
                 read_csv_kwargs['header'] = None
 
             logger.debug(f'⚠️ read_csv_kwargs: \n{read_csv_kwargs}')
-                
-            chunk_num = 0
-            for chunk in pd.read_csv(**read_csv_kwargs):
+
+            reader = pd.read_csv(**read_csv_kwargs)
+            first_chunk = True
+            chunk_num = 1
+
+            try:
+                chunk = next(reader)
+            except StopIteration:
+                return False  # no data
+
+            while True:
                 _, column_count = chunk.shape
-                if not has_header:
-                    # auto-name columns: COL001, COL002, ...
-                    chunk.columns = [f"COL{str(i+1).zfill(3)}" for i in range(chunk.shape[1])]
-                else:
+
+                if has_header:
                     chunk.columns = deduplicate_columns(chunk.columns)
+                else:
+                    chunk.columns = [f"COL{str(i+1).zfill(3)}" for i in range(chunk.shape[1])]
 
                 chunk = chunk.where(pd.notnull(chunk), None)
-
-                # ✅ Add the same ETL timestamp to every chunk
-                chunk["BODS_ETL_TIMESTAMP"] = timestamp
+                chunk["BODS_TIMESTAMP"] = timestamp
 
                 if first_chunk:
                     success = create_table_from_df(cursor, chunk, table_name)
                     if not success:
-                        return False  # ❌ Stop if table creation failed
+                        return False
                     first_chunk = False
 
-                chunk_num += 1
-                inserted = insert_data(cursor, chunk, table_name, chunk_num)
-                if inserted < 0:
-                    logger.error(
-                        f'❌ Insertion failed for <{file_path.name}> (table: <{table_name}>)'
-                    )
-                    return False # insert date failed
-                total_inserted += inserted
+                try:
+                    next_chunk = next(reader)
+                    inserted = insert_data(cursor, chunk, table_name, chunk_num)
+                    if inserted < 0:
+                        return False
+                    total_inserted += inserted
+                    chunk_num += 1
+                    chunk = next_chunk
+                except StopIteration:
+                    # last chunk
+                    if skip_footer > 0 and skip_footer < len(chunk):
+                        chunk = chunk.iloc[:-skip_footer, :]
+                    elif skip_footer >= len(chunk):
+                        logger.warning(f'⚠️ skip_footer ({skip_footer}) >= chunk size ({len(chunk)}), skipping entire chunk.')
+                        break
+
+                    inserted = insert_data(cursor, chunk, table_name, chunk_num)
+                    if inserted < 0:
+                        return False
+                    total_inserted += inserted
+                    break
 
             logger.info(f'✅ Total rows inserted into <{table_name}>: {total_inserted}')
-            
+
             if control_callback:
                 control_callback(
-                    cursor, file_path, table_name, encoding, 
-                    has_header, delimiter,
+                    cursor, file_path, table_name, skip_rows, skip_footer, enc, 
+                    has_header, delimiter, quotechar,
                     timestamp, total_inserted, column_count,
                     "BODS COMPLETED"
                 )
-            
+
             return  True # success
         except UnicodeDecodeError:
             logger.warning(
-                f'⚠️ Encoding <{encoding}> failed for <{file_path.name}>, trying fallback ...'
+                f'⚠️ Encoding <{enc}> failed for <{file_path.name}>, trying fallback ...'
             )
         except Exception as e:
             logger.error(
-                f'❌ Error reading <{file_path.name}> with encoding <{encoding}>: {e}'
+                f'❌ Error reading <{file_path.name}> with encoding <{enc}>: {e}'
             )
-            
+
             if control_callback:
                 control_callback(
-                    cursor, file_path, table_name, encoding, 
-                    has_header, delimiter,
-                    timestamp, 0, column_count,
-                    "BODS Failed"
+                    cursor, file_path, table_name, skip_rows, skip_footer, enc, 
+                    has_header, delimiter, quotechar, 
+                    timestamp, 0, 0,
+                    "BODS FAILED"
                 )
 
             break
@@ -478,7 +483,7 @@ def process_csv_file_in_chunks(
 
 def archive_csv_file(
     file_path: Path, 
-    archive_dir_name: str = "archive",
+    archive_dir_name: str = "Archive",
     timestamp: str = None,
 ):
     """Move the processed CSV file to a sibling 'archive' folder with a timestamped filename."""
@@ -495,7 +500,9 @@ def archive_csv_file(
 
     if timestamp is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        logger.debug(f'⚠️ CSV file archive timestamp: <{timestamp}>')
+    else:
+        timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S').strftime('%Y%m%d_%H%M%S')
+    logger.debug(f'⚠️ CSV file archive timestamp: <{timestamp}>')
 
     archived_filename = f'{file_path.stem}_{timestamp}{file_path.suffix}'
     destination = archive_dir / archived_filename
@@ -515,11 +522,20 @@ def read_file_list(file_path: Path, path_prefix: str = None) -> list:
     """Read file list form <path to>/File_Location.txt"""
     file_list = []
     try:
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path, quotechar='`', sep=',', dtype=str)
         if path_prefix:
             df['File Name'] = path_prefix + "/" + df['File Name']
-        file_list = df['File Name'].tolist()
-        logger.debug(f'🐍 File list: \n<{file_list}>')
+        
+        # file_list = list(zip(df['File Name'].tolist(), df['Table Name'].tolist()))
+        # Fill missing columns if older format
+        for col in ['Skip Rows', 'Skip Footer', 'Encoding', 
+                    'Has Header', 'Delimiter', 'Quotechar']:
+            if col not in df.columns:
+                df[col] = None
+        df = df.where(pd.notnull(df), None)
+        file_list = df.to_dict('records')        
+
+        logger.debug(f'🐍 File list with table names: \n<{file_list}>')
     except FileNotFoundError:
         logger.error(f'❌ The file <{file_path}> was not found')
     except Exception as e:
@@ -546,16 +562,7 @@ def main():
     FILE_ARCHIVE = os.getenv("FILE_ARCHIVE", "false").lower() == "true" 
 
     ENVIRONMENT = os.getenv("ENVIRONMENT", "SBX").upper()
-    match ENVIRONMENT:
-        case "DEV":
-            ENV = "DEV"
-        case "UAT" | "QA":
-            ENV = "UAT"
-        case "PROD" | "PRD":
-            ENV = "PRD"
-        case _:
-            ENV = "SBX"
-    _, AWS_BASE = aws_env(CONFIG_PATH, ENV)
+    ENV, AWS_BASE = aws_env(CONFIG_PATH, ENVIRONMENT)
 
     logger.debug(f'🐍 ENVIRONMENT: <{ENVIRONMENT}>, ENV: <{ENV}>, AWS_BASE: <{AWS_BASE}>')
     logger.debug(f'🐍 FORCE_LOAD: <{FORCE_LOAD}>, FILE_ARCHIVE: <{FILE_ARCHIVE}>')
@@ -568,10 +575,22 @@ def main():
 
     logger.info(f'⏩ Loading file(s) to Datasphere ({ENV}) from: <{AWS_BASE}> ...')
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logger.debug(f'⚠️ BODS ETL timestamp: <{timestamp}>')
     with ds_conn(CONFIG_PATH, ENV).cursor() as cursor:
-        for location in file_list:
+        # for location, provided_table_name in file_list:
+        for row in file_list:
+            location = row.get('File Name')
+            provided_table_name = row.get('Table Name')
+            skip_rows = int(row.get('Skip Rows') or 0)
+            skip_footer = int(row.get('Skip Footer') or 0)
+            encoding = row.get('Encoding') or None
+            has_header = str(row.get('Has Header')).strip().lower() \
+                == 'true' if row.get('Has Header') else None
+            delimiter = row.get('Delimiter') or None
+            quotechar = row.get('Quotechar') or None
+
             logger.info(f'⏩ Loading from: <{location}> ...')
             path = Path(f'{AWS_BASE}/{location}')
 
@@ -584,13 +603,26 @@ def main():
                         sipped_files += 1
                         continue
 
-                table_name = sanitize_table_name(path.name)
-                if process_csv_file_in_chunks(
-                    cursor, path, 
-                    table_name, 
-                    timestamp=timestamp,
+                # table_name = sanitize_table_name(path.name)
+                table_name = provided_table_name.strip() if provided_table_name and \
+                                str(provided_table_name).strip() else sanitize_table_name(path.name)
+
+                # ✅ Explicitly set BODS STARTED
+                update_control_table(cursor, path, table_name, skip_rows, skip_footer,
+                                     encoding or 'unknown', 
+                                     has_header if has_header is not None else False, 
+                                     delimiter or ',', quotechar or '', 
+                                     timestamp, None, None, 'BODS STARTED')
+
+                success = process_csv_file_in_chunks(
+                    cursor, path, table_name, timestamp=timestamp, 
                     control_callback=update_control_table,
-                ):
+                    skip_rows=skip_rows, skip_footer=skip_footer, 
+                    encoding=encoding, has_header=has_header, 
+                    delimiter=delimiter, quotechar=quotechar
+                )
+
+                if success:
                     if FILE_ARCHIVE:
                         archive_csv_file(path, timestamp=timestamp)
                     else:
@@ -612,13 +644,23 @@ def main():
                             continue
 
                     table_name = sanitize_table_name(file_path.name)
-                    if process_csv_file_in_chunks(
-                        cursor, 
-                        file_path, 
-                        table_name, 
-                        timestamp=timestamp,
+
+                    # ✅ Explicitly set BODS STARTED
+                    update_control_table(cursor, file_path, table_name, skip_rows, skip_footer, 
+                                         encoding or 'unknown', 
+                                         has_header if has_header is not None else False,
+                                         delimiter or ',', quotechar or '', 
+                                         timestamp, 0, 0, 'BODS STARTED')
+
+                    success = process_csv_file_in_chunks(
+                        cursor, file_path, table_name, timestamp=timestamp, 
                         control_callback=update_control_table,
-                    ):
+                        skip_rows=skip_rows, skip_footer=skip_footer,
+                        encoding=encoding, has_header=has_header, 
+                        delimiter=delimiter, quotechar=quotechar
+                    )
+
+                    if success:
                         if FILE_ARCHIVE:
                             archive_csv_file(file_path, timestamp=timestamp)
                         else:

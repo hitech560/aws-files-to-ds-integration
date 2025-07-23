@@ -21,7 +21,7 @@ This Python-based ETL pipeline automates the ingestion of flat files from AWS-ho
 
 1. **Environment Resolution**
    - Determine the target path prefix from `ENVIRONMENT`.
-   - e.g., `DEV` → `//aws.host.ca/dev/BI_Reports_DEV`
+   - e.g., `DEV` → `//aws.toyota.ca/dev/BI_Reports_DEV`
 
 2. **File List Input**
    - Read from `File_Locations.txt` to define files/folders for ingestion.
@@ -54,7 +54,7 @@ This Python-based ETL pipeline automates the ingestion of flat files from AWS-ho
 | `aws-files-to-ds.py`   | Main ETL logic |
 | `uni_logger.py`        | Logging utility with rotation & UTF-8 support |
 | `aws-files-to-ds.bat`  | Windows launcher |
-| `ds_config.ini`           | DB credentials and AWS files path per environment |
+| `config.ini`           | DB credentials per environment |
 | `File_Locations.txt`   | Input list of files to process |
 
 ---
@@ -65,7 +65,7 @@ This Python-based ETL pipeline automates the ingestion of flat files from AWS-ho
 |------------------|---------|
 | `FILE_NAME`      | Base filename |
 | `FILE_PATH`      | Directory only |
-| `LAST_MODIFIED`  | Last modified timestamp of each file |
+| `LAST_MODIFIED`  | Timestamp from OS |
 | `HAS_HEADER`     | Detected header flag |
 | `DELIMITER`      | Detected delimiter |
 | `ENCODING`       | File encoding |
@@ -80,7 +80,8 @@ This Python-based ETL pipeline automates the ingestion of flat files from AWS-ho
 
 ## Flow Chart
 
-![Pipeline Flow Chart](pipeline_flowchart.png)
+<!-- ![Pipeline Flow Chart](pipeline_flowchart.png) -->
+<img src='pipeline_flowchart.png' alt='Solution Flowchart' width='50%'>
 
 ---
 
