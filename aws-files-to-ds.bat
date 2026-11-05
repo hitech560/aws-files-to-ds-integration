@@ -48,22 +48,22 @@ echo Script successful!
 exit /b 0
 
 :error
-echo Script failed!
-exit /b 1
+echo Script failed! Python exit code: %PythonScriptResultCode%
+exit /b %PythonScriptResultCode%
 
 :usage
 echo Please provide desired parameter(s) to run Python script ...
-echo Usage: script.bat /? to display this help
-echo        script.bat [environment] [log level] [force_load] [file_archive]
+echo Usage: %~nx0 /? to display this help
+echo        %~nx0 [environment] [log level] [force_load] [file_archive]
 echo All parameters are optional and case-insensitive, but in order;
 echo If parameter not specified value will be assigned default value.
-echo    Environments : sbx, dev, uat, qa, prd, provid; default is sbx
+echo    Environments : sbx, dev, uat, qa, prd, prod; default is sbx
 echo    Log levels   : notset, info, warning, debug, error, critical; default is warning.
 echo    force_load   : skip load condiction to force load all files; default is False.
 echo    file_archive : archive file once successful loaded; default is False.
 echo Examples: 
-echo    script.bat
-echo    script.bat dev
-echo    script.bat dev info
-echo    script.bat uat error force_load
-echo    script.bat sbx warning force_load file_archive
+echo    %~nx0
+echo    %~nx0 dev
+echo    %~nx0 dev info
+echo    %~nx0 uat error force_load
+echo    %~nx0 sbx warning force_load file_archive

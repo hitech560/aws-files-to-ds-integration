@@ -60,10 +60,10 @@ def setup_logger(name: str = None) -> logging.Logger:
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
-        # File: UTF-8 safe with rotation
+        # File: UTF-8 safe with rotation, 5 files with 5MB each
         file_handler = logging.handlers.RotatingFileHandler(
             filename=log_file_path,
-            maxBytes=1_000_000,
+            maxBytes=5_000_000,
             backupCount=5,
             encoding="utf-8"
         )
